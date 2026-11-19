@@ -3,6 +3,9 @@ from typing import List, Union, Any
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ROOT_DIR = os.path.dirname(BACKEND_DIR)
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "GroundTruth.ai"
     TAGLINE: str = "Answers you can verify."
@@ -19,11 +22,19 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:3000",
+        "https://groundtruthai1.vercel.app",
     ]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Any) -> List[str]:
+        default_origins = [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+            "https://groundtruthai1.vercel.app",
+        ]
         if isinstance(v, str):
             if v.startswith("[") and v.endswith("]"):
                 import json
@@ -31,18 +42,43 @@ class Settings(BaseSettings):
                     return json.loads(v)
                 except Exception:
                     pass
-            return [i.strip() for i in v.split(",") if i.strip()]
+            origins = [i.strip() for i in v.split(",") if i.strip()]
+            for d in default_origins:
+                if d not in origins:
+                    origins.append(d)
+            return origins
         elif isinstance(v, list):
-            return [str(i) for i in v]
-        return [
-            "http://localhost:5173",
-            "http://localhost:3000",
-            "http://127.0.0.1:5173",
-            "http://127.0.0.1:3000",
-        ]
+            res = [str(i) for i in v]
+            for d in default_origins:
+                if d not in res:
+                    res.append(d)
+            return res
+        return default_origins
 
     # Database: Default PostgreSQL with pgvector, fallback SQLite supported for isolated tests
     DATABASE_URL: str = "postgresql://groundtruth_user:groundtruth_pass@localhost:5432/groundtruth_db"
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def resolve_database_url(cls, v: Any) -> str:
+        is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+        if not v or str(v).strip() == "":
+            if is_serverless:
+                return "sqlite:////tmp/groundtruth.db"
+            return f"sqlite:///{os.path.join(BACKEND_DIR, 'groundtruth.db').replace('\\', '/')}"
+            
+        v_str = str(v).strip()
+        if v_str.startswith("postgres://"):
+            v_str = v_str.replace("postgres://", "postgresql://", 1)
+            
+        if is_serverless and "sqlite" in v_str and not v_str.startswith("sqlite:////tmp"):
+            return "sqlite:////tmp/groundtruth.db"
+            
+        if v_str.startswith("sqlite:///."):
+            rel_path = v_str[len("sqlite:///."):].lstrip("/\\")
+            abs_path = os.path.join(BACKEND_DIR, rel_path).replace("\\", "/")
+            return f"sqlite:///{abs_path}"
+        return v_str
     
     # AI Providers (LLM & Embeddings)
     LLM_PROVIDER: str = "mock"  # "mock", "openai", "gemini", "anthropic"
@@ -68,10 +104,14 @@ class Settings(BaseSettings):
     # Storage and Upload limits
     MAX_UPLOAD_SIZE_BYTES: int = 20 * 1024 * 1024  # 20 MB
     ALLOWED_EXTENSIONS: set = {"pdf", "docx", "txt"}
-    STORAGE_DIR: str = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "uploads")
+    STORAGE_DIR: str = "/tmp/uploads" if (os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME")) else os.path.join(BACKEND_DIR, "uploads")
     
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[
+            os.path.join(BACKEND_DIR, ".env"),
+            os.path.join(ROOT_DIR, ".env"),
+            ".env"
+        ],
         env_file_encoding="utf-8",
         extra="ignore"
     )

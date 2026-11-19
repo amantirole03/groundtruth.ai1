@@ -19,7 +19,17 @@ export const LoginPage: React.FC = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Authentication failed. Please check your credentials.');
+      if (typeof err.response?.data?.detail === 'string') {
+        setError(err.response.data.detail);
+      } else if (Array.isArray(err.response?.data?.detail)) {
+        setError(err.response.data.detail.map((d: any) => d.msg || 'Invalid field').join(', '));
+      } else if (err.response?.status === 405) {
+        setError('Backend API returned HTTP 405. Please verify backend deployment.');
+      } else if (!err.response) {
+        setError('Unable to connect to backend server. Please verify the backend is running.');
+      } else {
+        setError('Authentication failed. Please check your credentials.');
+      }
     } finally {
       setLoading(false);
     }
