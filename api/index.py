@@ -1,17 +1,17 @@
 import os
 import sys
 
-# Add project root and backend folder to sys.path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.dirname(current_dir)
+# Ensure backend directory and root directory are in sys.path
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 backend_dir = os.path.join(root_dir, "backend")
 
-if root_dir not in sys.path:
-    sys.path.insert(0, root_dir)
-if backend_dir not in sys.path:
-    sys.path.insert(0, backend_dir)
+for p in (root_dir, backend_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-from app.main import app
+try:
+    from backend.app.main import app
+except ImportError:
+    from app.main import app
 
-# Export for Vercel ASGI serverless handler
 handler = app
