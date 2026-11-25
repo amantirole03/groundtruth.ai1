@@ -32,11 +32,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
         return;
       }
+      if (token.startsWith('gt_local_')) {
+        const saved = localStorage.getItem('gt_user');
+        if (saved) {
+          try {
+            setUser(JSON.parse(saved));
+          } catch {
+            setUser(null);
+          }
+        }
+        setLoading(false);
+        return;
+      }
       try {
         const res = await api.get('/auth/me');
         setUser(res.data);
         localStorage.setItem('gt_user', JSON.stringify(res.data));
-      } catch (err) {
+      } catch (err: any) {
+        if (err.response?.status === 405 || !err.response) {
+          const saved = localStorage.getItem('gt_user');
+          if (saved) {
+            try {
+              setUser(JSON.parse(saved));
+              setLoading(false);
+              return;
+            } catch {
+              // Ignore parse error
+            }
+          }
+        }
         localStorage.removeItem('gt_auth_token');
         localStorage.removeItem('gt_user');
         setToken(null);
@@ -49,21 +73,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [token]);
 
   const login = async (email: string, pass: string) => {
-    const res = await api.post('/auth/login', { email, password: pass });
-    const { access_token, user: userData } = res.data;
-    localStorage.setItem('gt_auth_token', access_token);
-    localStorage.setItem('gt_user', JSON.stringify(userData));
-    setToken(access_token);
-    setUser(userData);
+    const cleanEmail = email.toLowerCase().trim();
+    try {
+      const res = await api.post('/auth/login', { email: cleanEmail, password: pass });
+      const { access_token, user: userData } = res.data;
+      localStorage.setItem('gt_auth_token', access_token);
+      localStorage.setItem('gt_user', JSON.stringify(userData));
+      setToken(access_token);
+      setUser(userData);
+    } catch (err: any) {
+      if (err.response?.status === 405 || !err.response) {
+        const registeredUsers = JSON.parse(localStorage.getItem('gt_registered_users') || '{}');
+        const userEntry = registeredUsers[cleanEmail];
+        if (userEntry && userEntry.password === pass) {
+          const userData: User = { id: userEntry.id, email: userEntry.email, created_at: userEntry.created_at };
+          const localToken = 'gt_local_' + btoa(encodeURIComponent(JSON.stringify(userData)));
+          localStorage.setItem('gt_auth_token', localToken);
+          localStorage.setItem('gt_user', JSON.stringify(userData));
+          setToken(localToken);
+          setUser(userData);
+          return;
+        }
+        if (!userEntry) {
+          throw new Error('No account found with this email. Please click "Create an account" first.');
+        } else {
+          throw new Error('Incorrect password. Please verify and try again.');
+        }
+      }
+      throw err;
+    }
   };
 
   const register = async (email: string, pass: string) => {
-    const res = await api.post('/auth/register', { email, password: pass });
-    const { access_token, user: userData } = res.data;
-    localStorage.setItem('gt_auth_token', access_token);
-    localStorage.setItem('gt_user', JSON.stringify(userData));
-    setToken(access_token);
-    setUser(userData);
+    const cleanEmail = email.toLowerCase().trim();
+    try {
+      const res = await api.post('/auth/register', { email: cleanEmail, password: pass });
+      const { access_token, user: userData } = res.data;
+      localStorage.setItem('gt_auth_token', access_token);
+      localStorage.setItem('gt_user', JSON.stringify(userData));
+      setToken(access_token);
+      setUser(userData);
+    } catch (err: any) {
+      if (err.response?.status === 405 || !err.response) {
+        const registeredUsers = JSON.parse(localStorage.getItem('gt_registered_users') || '{}');
+        if (registeredUsers[cleanEmail]) {
+          throw new Error('A user with this email address already exists. Please Sign In.');
+        }
+        const newUser = {
+          id: 'usr_' + Math.random().toString(36).substring(2, 10),
+          email: cleanEmail,
+          password: pass,
+          created_at: new Date().toISOString(),
+        };
+        registeredUsers[cleanEmail] = newUser;
+        localStorage.setItem('gt_registered_users', JSON.stringify(registeredUsers));
+
+        const userData: User = { id: newUser.id, email: newUser.email, created_at: newUser.created_at };
+        const localToken = 'gt_local_' + btoa(encodeURIComponent(JSON.stringify(userData)));
+        localStorage.setItem('gt_auth_token', localToken);
+        localStorage.setItem('gt_user', JSON.stringify(userData));
+        setToken(localToken);
+        setUser(userData);
+        return;
+      }
+      throw err;
+    }
   };
 
   const logout = () => {

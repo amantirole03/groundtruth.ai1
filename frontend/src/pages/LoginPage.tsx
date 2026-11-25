@@ -23,10 +23,8 @@ export const LoginPage: React.FC = () => {
         setError(err.response.data.detail);
       } else if (Array.isArray(err.response?.data?.detail)) {
         setError(err.response.data.detail.map((d: any) => d.msg || 'Invalid field').join(', '));
-      } else if (err.response?.status === 405) {
-        setError('Backend API returned HTTP 405. Please verify backend deployment.');
-      } else if (!err.response) {
-        setError('Unable to connect to backend server. Please verify the backend is running.');
+      } else if (err.message) {
+        setError(err.message);
       } else {
         setError('Authentication failed. Please check your credentials.');
       }

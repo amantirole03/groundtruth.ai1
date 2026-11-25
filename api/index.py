@@ -1,13 +1,22 @@
 import os
 import sys
 
-# Ensure backend directory and root directory are in sys.path
-root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-backend_dir = os.path.join(root_dir, "backend")
+# Resilient path resolution for both local and Vercel/AWS Lambda serverless environments
+file_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(file_dir)
 
-for p in (root_dir, backend_dir):
-    if p not in sys.path:
-        sys.path.insert(0, p)
+candidates = [
+    os.path.join(parent_dir, "backend"),
+    os.path.join(file_dir, "backend"),
+    os.path.join(os.getcwd(), "backend"),
+    parent_dir,
+    file_dir,
+    os.getcwd(),
+]
+
+for c in candidates:
+    if os.path.isdir(c) and c not in sys.path:
+        sys.path.insert(0, c)
 
 try:
     from backend.app.main import app

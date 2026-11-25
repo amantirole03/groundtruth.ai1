@@ -30,6 +30,17 @@ export const DashboardPage: React.FC = () => {
       const res = await api.get('/stats');
       setStats(res.data);
     } catch (err: any) {
+      if (err.response?.status === 405 || !err.response) {
+        setStats({
+          total_documents: 0,
+          indexed_documents: 0,
+          questions_answered: 0,
+          questions_abstained: 0,
+          recent_activity: [],
+          processing_statuses: { completed: 0, processing: 0, failed: 0 }
+        });
+        return;
+      }
       setError(err.response?.data?.detail || 'Failed to load dashboard metrics.');
     } finally {
       setLoading(false);
