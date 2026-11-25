@@ -5,7 +5,7 @@
   "description": "GroundTruth.ai - Evidence-Grounded RAG Platform",
   "scripts": {
     "dev": "npm --prefix frontend run dev",
-    "build": "npm --prefix frontend install && npm --prefix frontend run build",
+    "build": "node build.js",
     "preview": "npm --prefix frontend run preview"
   }
 }
