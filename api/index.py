@@ -1,26 +1,45 @@
 import os
 import sys
 
-# Resilient path resolution for both local and Vercel/AWS Lambda serverless environments
-file_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(file_dir)
+# Ensure backend directory and root directory are in sys.path
+root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+backend_dir = os.path.join(root_dir, "backend")
 
-candidates = [
-    os.path.join(parent_dir, "backend"),
-    os.path.join(file_dir, "backend"),
-    os.path.join(os.getcwd(), "backend"),
-    parent_dir,
-    file_dir,
-    os.getcwd(),
-]
+for p in (root_dir, backend_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
-for c in candidates:
-    if os.path.isdir(c) and c not in sys.path:
-        sys.path.insert(0, c)
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.api.v1.api import api_router
+from app.core.config import settings
 
-try:
-    from backend.app.main import app
-except ImportError:
-    from app.main import app
+# Explicit top-level FastAPI instance AST-detectable by Vercel's Python builder
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    description="Evidence-grounded RAG application with factual verification and honest abstention.",
+    version="1.0.0",
+)
 
-handler = app
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Mount all API endpoints with /api prefix and without prefix
+app.include_router(api_router, prefix=settings.API_V1_STR)
+if settings.API_V1_STR:
+    app.include_router(api_router)
+
+@app.get("/")
+@app.get("/api")
+def root_health():
+    return {
+        "status": "healthy",
+        "service": settings.PROJECT_NAME,
+        "version": "1.0.0"
+    }
