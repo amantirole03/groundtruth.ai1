@@ -55,24 +55,25 @@ class Settings(BaseSettings):
             return res
         return default_origins
 
-    # Database: Default PostgreSQL with pgvector, fallback SQLite supported for isolated tests
-    DATABASE_URL: str = "postgresql://groundtruth_user:groundtruth_pass@localhost:5432/groundtruth_db"
+    # Database: Default SQLite for serverless and development, remote PostgreSQL when DATABASE_URL is set
+    DATABASE_URL: str = ""
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod
     def resolve_database_url(cls, v: Any) -> str:
         is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
-        if not v or str(v).strip() == "":
-            if is_serverless:
+        v_str = str(v).strip() if v else ""
+        
+        # On serverless (Vercel / Lambda), always use /tmp/groundtruth.db if no remote PostgreSQL is configured
+        if is_serverless:
+            if not v_str or "localhost" in v_str or "127.0.0.1" in v_str or "sqlite" in v_str or "groundtruth_user" in v_str:
                 return "sqlite:////tmp/groundtruth.db"
+
+        if not v_str:
             return f"sqlite:///{os.path.join(BACKEND_DIR, 'groundtruth.db').replace('\\', '/')}"
             
-        v_str = str(v).strip()
         if v_str.startswith("postgres://"):
             v_str = v_str.replace("postgres://", "postgresql://", 1)
-            
-        if is_serverless and "sqlite" in v_str and not v_str.startswith("sqlite:////tmp"):
-            return "sqlite:////tmp/groundtruth.db"
             
         if v_str.startswith("sqlite:///."):
             rel_path = v_str[len("sqlite:///."):].lstrip("/\\")
@@ -117,4 +118,7 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
-os.makedirs(settings.STORAGE_DIR, exist_ok=True)
+try:
+    os.makedirs(settings.STORAGE_DIR, exist_ok=True)
+except Exception:
+    pass
