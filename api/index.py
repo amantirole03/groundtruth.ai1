@@ -13,6 +13,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.api import api_router
 from app.core.config import settings
+from app.db.base import Base
+from app.db.session import engine
+
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception:
+    pass
 
 # Explicit top-level FastAPI instance AST-detectable by Vercel's Python builder
 app = FastAPI(

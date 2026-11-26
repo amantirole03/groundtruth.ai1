@@ -1,8 +1,14 @@
 import time
 import json
 import uuid
+import math
 from typing import List, Dict, Any
-import numpy as np
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
 from sqlalchemy.orm import Session
 from app.models.models import Evaluation, Document, DocumentChunk, User
 from app.services.rag_service import RAGService
@@ -245,7 +251,7 @@ class EvaluationEngine:
         false_abstention_rate = (false_abstentions / total_answerable) if total_answerable > 0 else 0.0
         retrieval_recall = (retrieval_hits / total_answerable) if total_answerable > 0 else 1.0
         correctness_rate = (correct_answers / total_answerable) if total_answerable > 0 else 1.0
-        mean_latency = float(np.mean(latencies)) if latencies else 0.0
+        mean_latency = float(sum(latencies) / len(latencies)) if latencies else 0.0
 
         metrics = {
             "total_cases": len(test_cases),

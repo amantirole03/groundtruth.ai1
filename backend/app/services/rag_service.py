@@ -1,5 +1,5 @@
 import uuid
-import numpy as np
+import math
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -7,6 +7,12 @@ from app.models.models import Document, DocumentChunk, Message, Citation, Conver
 from app.services.embedding_provider import get_embedding_provider
 from app.services.ai_provider import get_ai_provider
 from app.core.config import settings
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
 
 class RAGService:
     """
@@ -16,14 +22,15 @@ class RAGService:
 
     @staticmethod
     def calculate_cosine_similarity(vec_a: List[float], vec_b: List[float]) -> float:
-        """Computes cosine similarity between two float vectors."""
-        a = np.array(vec_a, dtype=np.float32)
-        b = np.array(vec_b, dtype=np.float32)
-        norm_a = np.linalg.norm(a)
-        norm_b = np.linalg.norm(b)
+        """Computes cosine similarity between two float vectors using pure Python."""
+        if not vec_a or not vec_b:
+            return 0.0
+        dot = sum(x * y for x, y in zip(vec_a, vec_b))
+        norm_a = math.sqrt(sum(x * x for x in vec_a))
+        norm_b = math.sqrt(sum(y * y for y in vec_b))
         if norm_a == 0 or norm_b == 0:
             return 0.0
-        return float(np.dot(a, b) / (norm_a * norm_b))
+        return float(dot / (norm_a * norm_b))
 
     @classmethod
     def retrieve_relevant_chunks(

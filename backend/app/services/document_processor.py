@@ -30,20 +30,42 @@ class DocumentProcessor:
     @staticmethod
     def extract_text_from_pdf(file_path: str) -> List[Dict[str, Any]]:
         """
-        Extracts text from PDF page by page using PyMuPDF (fitz).
+        Extracts text from PDF page by page using pypdf or PyMuPDF (fitz).
         Preserves page numbers (1-indexed).
         """
         pages = []
+        # 1. Try lightweight pypdf
         try:
-            import fitz  # PyMuPDF
+            import pypdf
+            reader = pypdf.PdfReader(file_path)
+            if reader.is_encrypted:
+                try:
+                    reader.decrypt("")
+                except Exception:
+                    raise DocumentProcessingError("Document is encrypted or password-protected.")
+            for page_idx, page in enumerate(reader.pages):
+                text = page.extract_text() or ""
+                cleaned = DocumentProcessor.clean_text(text)
+                if cleaned:
+                    pages.append({
+                        "page_number": page_idx + 1,
+                        "content": cleaned
+                    })
+            if pages:
+                return pages
+        except DocumentProcessingError:
+            raise
+        except Exception:
+            pass
+
+        # 2. Fallback to PyMuPDF (fitz) if installed
+        try:
+            import fitz
             doc = fitz.open(file_path)
-            
             if doc.is_encrypted:
                 raise DocumentProcessingError("Document is encrypted or password-protected.")
-
             if doc.page_count == 0:
                 raise DocumentProcessingError("PDF document contains no pages.")
-
             for page_idx in range(doc.page_count):
                 page = doc.load_page(page_idx)
                 text = page.get_text("text")
@@ -54,6 +76,8 @@ class DocumentProcessor:
                         "content": cleaned
                     })
             doc.close()
+            if pages:
+                return pages
         except DocumentProcessingError:
             raise
         except Exception as e:
@@ -66,7 +90,7 @@ class DocumentProcessor:
     @staticmethod
     def extract_text_from_docx(file_path: str) -> List[Dict[str, Any]]:
         """
-        Extracts text from DOCX using python-docx.
+        Extracts text from DOCX using python-docx or standard library zipfile.
         """
         try:
             from docx import Document
@@ -76,19 +100,30 @@ class DocumentProcessor:
                 cleaned = DocumentProcessor.clean_text(p.text)
                 if cleaned:
                     paragraphs.append(cleaned)
-
-            # Also check tables
             for table in doc.tables:
                 for row in table.rows:
                     row_text = " | ".join(DocumentProcessor.clean_text(cell.text) for cell in row.cells if cell.text.strip())
                     if row_text:
                         paragraphs.append(row_text)
-
             full_text = "\n\n".join(paragraphs)
             if not full_text.strip():
                 raise DocumentProcessingError("DOCX document contains no extractable text.")
-
             return [{"page_number": 1, "content": full_text}]
+        except ImportError:
+            # Fallback for lightweight serverless environments: extract XML from docx archive directly
+            import zipfile
+            import xml.etree.ElementTree as ET
+            try:
+                with zipfile.ZipFile(file_path) as z:
+                    xml_content = z.read("word/document.xml")
+                tree = ET.fromstring(xml_content)
+                text = "".join(tree.itertext())
+                cleaned = DocumentProcessor.clean_text(text)
+                if not cleaned:
+                    raise DocumentProcessingError("DOCX document contains no extractable text.")
+                return [{"page_number": 1, "content": cleaned}]
+            except Exception as e:
+                raise DocumentProcessingError(f"Failed to process DOCX file: {str(e)}")
         except DocumentProcessingError:
             raise
         except Exception as e:

@@ -1,7 +1,13 @@
 import math
 import hashlib
 from typing import List
-import numpy as np
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
+
 from app.core.config import settings
 
 class BaseEmbeddingProvider:
@@ -18,6 +24,7 @@ class MockEmbeddingProvider(BaseEmbeddingProvider):
     Generates normalized 1536-dimensional vector representations.
     Ensures identical texts yield cosine similarity = 1.0, and lexically/semantically
     overlapping texts yield proportional cosine similarities without external API calls.
+    Works natively in pure Python without requiring NumPy.
     """
     def __init__(self, dimension: int = 1536):
         self.dimension = dimension
@@ -27,7 +34,7 @@ class MockEmbeddingProvider(BaseEmbeddingProvider):
         if not cleaned:
             return [0.0] * self.dimension
 
-        vec = np.zeros(self.dimension, dtype=np.float32)
+        vec = [0.0] * self.dimension
         words = cleaned.split()
         
         # Word-level hashed n-grams
@@ -52,12 +59,12 @@ class MockEmbeddingProvider(BaseEmbeddingProvider):
             idx_sub = h_sub % self.dimension
             vec[idx_sub] += 0.3
 
-        # L2 Normalization
-        norm = np.linalg.norm(vec)
+        # L2 Normalization (pure Python sqrt, standard library)
+        norm = math.sqrt(sum(v * v for v in vec))
         if norm > 0:
-            vec = vec / norm
+            vec = [v / norm for v in vec]
 
-        return vec.tolist()
+        return vec
 
     def embed_text(self, text: str) -> List[float]:
         return self._hash_vector(text)

@@ -1,0 +1,12 @@
+backend/venv
+backend/tests
+backend/groundtruth.db
+backend/*.db
+backend/uploads
+uploads
+*.pyc
+__pycache__
+.git
+.pytest_cache
+node_modules
+dist
