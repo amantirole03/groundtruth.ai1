@@ -9,11 +9,15 @@ backend/groundtruth.db
 backend/*.db
 *.db
 backend/uploads/
+uploads/
 .pytest_cache/
 .coverage
 htmlcov/
 
 # Node / Frontend
+node_modules/
+dist/
+.vite/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/

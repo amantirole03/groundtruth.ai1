@@ -1,7 +1,0 @@
-{
-  "name": "groundtruth-api",
-  "private": true,
-  "scripts": {
-    "build": "node build.js"
-  }
-}
